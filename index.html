@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>test</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta charset="utf-8">
+        <style>
+            html {
+                width: 90vw;
+                height: 100vh;
+                box-sizing: border-box;
+                font-size: 14px;
+            }
+
+            body {
+                margin: 0;
+                padding: 0;
+                box-sizing: inherit;
+                font-family: Verdana;
+            }
+
+            #canvas {
+                /*width: 100%;
+                height: 90vh;*/
+                /* table-layout: fixed;*/
+                top: 5px;
+                left: 5px;
+                position: relative;
+                /* border-collapse: collapse;
+                border-spacing: 0px; */               
+                box-sizing: inherit;
+            }
+
+            div .row {
+                display: flex;
+                width: 100%;
+                height: 1rem;
+                max-height: 1rem;
+                box-sizing: inherit;
+            }
+
+            div .cell {
+                width: 1rem;
+                min-width: 1rem;
+                height: 1rem;
+                min-height: 1rem;
+                border-width: 1px 1px 0 0;
+                border-color: #0c0c0c;
+                border-style: solid;
+                box-sizing: inherit;
+                padding: 0;
+                margin: 0;
+            }
+
+            div .cell:first-child {
+                border-left: solid 1px;
+            }
+
+            .row:last-child .cell {
+                border-bottom: solid 1px;
+            }
+
+            .dot {
+                width: 1rem;
+                min-width: 1rem;
+                height: 1rem;
+                min-height: 1rem;
+                position: absolute;               
+                background: red;
+            }
+            #duration {
+                width: 600px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="canvas"></div>
+        <div id="duration">&nbsp;</div>
+
+        <script type="text/javascript">
+
+        window.addEventListener("load", event => {
+            simulation(5, 1.0, 40, 50, 1, 1, StandardRobot);            
+         });
+
+        async function simulation(numRobots, speed, width, height, minCoverage, numTrials, robotType) {
+
+            const results = [];        
+
+            function delay() {
+                return new Promise ((resolve, reject) => {
+                    const n = performance.now();
+                    while (performance.now() - n < 100){}
+                    resolve(n);
+                });
+            }
+
+            function paint(robot, resolve) {
+               
+                function step() {
+                    let coverage = robot.room.numCleanCells() / robot.room.numCells();
+                    if (coverage < minCoverage) {
+                        robot.updatePositionAndClean();
+                        setTimeout(() => window.requestAnimationFrame(step), 100)
+                         //window.requestAnimationFrame(step)
+                    } else {
+                        document.body.querySelector("#duration").innerHTML += "<br>robot:" + robot.name +  " end: " + performance.now() + ' miliseconds';
+                        resolve(robot.name);
+                    }
+                }   
+
+                window.requestAnimationFrame(step);                 
+            }
+
+            function render() {
+                document.body.querySelector("#duration").innerHTML += "<br>start: " + performance.now() + ' miliseconds';               
+                const room = new Room(width, height);
+                const robots = Array.from({length: numRobots}, (_, index) => new robotType(room, speed, index));
+                return new Promise(function(resolve, reject){
+                    robots.forEach((robot) => {
+                        paint(robot, resolve);                    
+                    });
+                });
+            }
+
+
+            for(let i=0; i<numTrials; i++) { 
+                 /************ Synchronous - without animation *****************/
+                // document.body.querySelector("#duration").innerHTML += "<br>start: " + performance.now() + ' miliseconds';               
+                // const room = new Room(width, height);
+                // const robots = Array.from({length: numRobots}, (_, index) => new robotType(room, speed, index));
+               
+                // let coverage = room.numCleanCells() / room.numCells();
+
+                // while (coverage < minCoverage) {
+                //     robots.forEach((robot) => {
+                //         // window.requestAnimationFrame(() => { step(robot); });                    
+                //         robot.updatePositionAndClean();                       
+                //     });
+                //     coverage = room.numCleanCells() / room.numCells();
+                // }
+
+                // document.body.querySelector("#duration").innerHTML += "<br>" + " end: " + performance.now() + ' miliseconds';
+
+                /*************** asyncrhonous - with animation *****************/
+               const resolvedBy = await render();
+               console.log(resolvedBy);
+            //    [].slice.call(document.body.querySelectorAll(".dot"),0).forEach(dot => {
+            //        document.body.removeChild(dot);
+            //    })          
+            }
+        }
+
+        function getRandomArbitrary(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        function getRandomInt(min, max) {
+            min = Math.ceil(min);
+            max = Math.floor(max);
+            return Math.floor(Math.random() * (max - min)) + min; //The maximum is exclusive and the minimum is inclusive
+        }
+
+        class Position {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+
+            get xcord() {
+                return this.x;
+            }
+
+            get ycord() {
+                return this.y;
+            }
+
+            createNewPosition(angle, speed) {
+                const radians = angle * (2 * Math.PI) / 360;
+                const deltaX = speed * Math.cos(radians);
+                const deltaY = speed * Math.sin(radians);
+                return new Position(this.x + deltaX, this.y + deltaY);
+            }
+        }
+
+        class Room {
+            constructor(cols, rows) {
+                const table = document.querySelector("#canvas");
+                table.innerHTML = "";
+                this.cells = new Map();
+                this.width = cols;
+                this.height = rows;
+                for (let i = 0; i < rows; i++) {
+                    const tr = document.createElement("div");
+                    tr.classList.add('row');
+                    for (let j = 0; j < cols; j++) {
+                        const td = document.createElement("div");
+                        td.setAttribute("data-id", JSON.stringify([j,i]));
+                        td.classList.add('cell');
+                        tr.appendChild(td);
+                        this.cells.set(JSON.stringify([j,i]), false);
+                    }
+                    table.appendChild(tr);
+                }
+                console.log(this.cells);
+            }
+
+            numCells() {
+                return this.cells.size;
+            }
+
+            numCleanCells() {
+                const mapValues = this.cells.values();
+                let count = 0;
+                for (let v of mapValues) {
+                    if (v) {
+                        count += 1;
+                    }
+                }
+                return count;
+            }
+
+            isPositionInRoom(pos) {
+                const x = pos.xcord;
+                const y = pos.ycord;
+                return x >= 0 && x < this.width && y >= 0 && y < this.height;
+            }
+
+            isPositionClean(pos) {
+                if (this.isPositionInRoom(pos)) {
+                    const x = Math.floor(pos.xcord);
+                    const y = Math.floor(pos.ycord);
+                    return this.cells.get(JSON.stringify([x,y]));
+                }
+                return false;
+            }
+
+            getRandomPosition() {
+                const x = getRandomArbitrary(0, this.width);
+                const y = getRandomArbitrary(0, this.height);
+                return new Position(x, y);
+            }
+
+            cleanPosition(pos) {
+                if(this.isPositionInRoom(pos)) {
+                    const x = Math.floor(pos.xcord);
+                    const y = Math.floor(pos.ycord);
+                    this.cells.set(JSON.stringify([x,y]), true);
+                    const cell = document.body.querySelector(`[data-id='[${x},${y}]']`);
+                    cell.style.backgroundColor = "green";
+                } else {
+                  throw new Error("position does not exist");
+                }
+            }
+        }
+
+        class Robot {
+            constructor(room, speed, name) {
+                this.name = name;
+                this.room = room;
+                this.speed = speed;
+
+                 // create robot html element
+                this.robot = document.createElement("div");
+                this.robot.classList.add("dot");
+                document.body.querySelector("#canvas").appendChild(this.robot);
+
+                const angle = getRandomInt(0, 360);
+                this.setDirection(angle);
+                const position = room.getRandomPosition();
+                this.setPosition(position)
+                // this.room.cleanPosition(this.getPosition());               
+            }
+
+            setPosition(pos) {
+                this.position = pos;
+                this.move();                
+            }
+
+            getPosition() {
+                return this.position;
+            }
+
+            async move() {
+                const x = Math.floor(this.getPosition().xcord);
+                const y = Math.floor(this.getPosition().ycord);
+                const adjustedX = (x * 1) //+ 0.6;
+                const adjustedY = (y * 1) // + 0.6;
+                // console.log(x,y, adjustedX, adjustedY)
+                this.robot.style.left = `${adjustedX}rem`;
+                this.robot.style.top =  `${adjustedY}rem`;
+
+                if(!this.room.isPositionClean(this.getPosition())) {
+                    this.room.cleanPosition(this.getPosition()); 
+                }               
+            }
+
+            getDirection() {
+                return this.angle;
+            }
+
+            setDirection(dir) {
+                this.angle = dir;
+            }
+
+            updatePositionAndClean() {}
+        }
+
+        class StandardRobot extends Robot {
+            updatePositionAndClean() {
+                const newPosition = this.getPosition().createNewPosition(
+                    this.getDirection(),
+                    this.speed
+                );
+                if(!this.room.isPositionInRoom(newPosition)) {
+                    let angle = getRandomInt(0, 360);
+                    while (angle == this.getDirection()) {
+                        angle = getRandomInt(0, 360);
+                    }
+                    this.setDirection(angle); // create new angle for the next time
+                    //this.robot.style.transform = `rotate(${angle}deg)`;
+                } else {
+                    this.setPosition(newPosition);
+                    // if(this.room.isPositionClean(newPosition)) {
+                    //    return;
+                    // }
+                    // this.room.cleanPosition(newPosition);                    
+                }
+            }
+        }
+
+        </script>
+
+    </body>
+
+</html>
